@@ -30,13 +30,15 @@ flowchart LR
 - lifecycle state;
 - transcript events;
 - adapter capability records;
-- a harness actor surface for the assembled runtime;
+- a Kameo harness actor surface for the assembled runtime;
 - test fixtures for fake harnesses.
 
 ## 2 · State and Ownership
 
 The harness component owns live harness identity and lifecycle state.
-Transcript and lifecycle events are typed observations.
+Transcript and lifecycle events are typed observations. `HarnessActor` is the
+mailbox-backed owner for one live harness binding, its lifecycle state, and its
+transcript event count.
 
 When durable harness history is needed, the harness actor opens its **own**
 redb file (e.g. `harness.redb`) through `persona-sema`, which uses the
@@ -67,14 +69,16 @@ This repo does not own:
 - Harnesses are first-class records.
 - A closed viewer does not imply a killed harness.
 - Transcript and lifecycle observations are pushed events.
+- Live harness lifecycle and transcript state belongs inside Kameo actors.
 - Adapter capabilities are explicit typed records, not stringly flags.
 
 ## Code Map
 
 ```text
-src/harness.rs     harness identity and lifecycle records
-src/transcript.rs  transcript event records
-tests/             harness smoke tests
+src/harness.rs       harness identity records
+src/harness_actor.rs Kameo lifecycle and transcript state owner
+src/transcript.rs    transcript event records
+tests/               harness smoke and actor-runtime constraint tests
 ```
 
 ## See Also

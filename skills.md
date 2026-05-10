@@ -9,6 +9,7 @@ Rules for work here:
 - Keep OS/window-manager observations in `persona-system`.
 - Keep durable PTY and WezTerm viewer transport in `persona-wezterm`.
 - Model harness capabilities as typed values, not strings.
+- Keep live lifecycle and transcript state inside `HarnessActor`; do not add
+  alternate actor runtime wrappers.
 - Preserve the durable-harness invariant: closing a viewer must not kill the
   harness.
-

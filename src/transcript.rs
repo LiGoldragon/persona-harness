@@ -17,7 +17,7 @@ impl TranscriptLine {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, kameo::Reply)]
 pub struct TranscriptEvent {
     harness: HarnessId,
     line: TranscriptLine,
@@ -26,6 +26,10 @@ pub struct TranscriptEvent {
 impl TranscriptEvent {
     pub fn new(harness: HarnessId, line: TranscriptLine) -> Self {
         Self { harness, line }
+    }
+
+    pub fn harness(&self) -> &HarnessId {
+        &self.harness
     }
 
     pub fn line(&self) -> &TranscriptLine {
