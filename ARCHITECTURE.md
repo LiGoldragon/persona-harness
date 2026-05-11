@@ -26,7 +26,7 @@ flowchart LR
     "Harness" -->|"adapter command"| "HarnessAdapter"
     "HarnessAdapter" -->|"terminal transport"| "persona-wezterm"
     "Harness" -->|"transcript event"| "persona-router"
-    "Harness" -->|"harness-owned state"| "persona-sema"
+    "Harness" -->|"harness-owned state"| "harness Sema"
 ```
 
 ## 1 · Component Surface
@@ -49,9 +49,9 @@ mailbox-backed owner for one live harness binding, its lifecycle state, and its
 transcript event count.
 
 When durable harness history is needed, the harness actor opens its **own**
-redb file (e.g. `harness.redb`) through `persona-sema`, which uses the
-workspace's `sema` database library underneath. The harness actor sequences
-its own writes; no shared cross-component database. Per
+redb file (e.g. `harness.redb`) through a harness-owned Sema layer over the
+workspace's `sema` database library. The harness actor sequences its own
+writes; no shared cross-component database. Per
 `~/primary/reports/designer/92-sema-as-database-library-architecture-revamp.md`.
 
 ## 3 · Boundaries
@@ -71,8 +71,8 @@ This repo does not own:
 - PTY and WezTerm byte transport (`persona-wezterm`);
 - harness wire contract definitions (`signal-persona-harness`);
 - terminal wire contract definitions (`signal-persona-terminal`);
-- umbrella Persona record definitions (`signal-persona`);
-- database write ownership for other components (`persona-sema` users).
+- the top-level engine-manager contract (`signal-persona`);
+- database write ownership for other components' Sema layers.
 
 ## 4 · Invariants
 
@@ -97,5 +97,5 @@ tests/               harness smoke and actor-runtime constraint tests
 - `../persona-router/ARCHITECTURE.md`
 - `../persona-system/ARCHITECTURE.md`
 - `../persona-wezterm/ARCHITECTURE.md`
-- `../persona-sema/ARCHITECTURE.md`
+- `../sema/ARCHITECTURE.md`
 - `../signal-persona-harness/ARCHITECTURE.md`
