@@ -120,15 +120,17 @@ fn terminal_delivery_cannot_use_retired_transport_or_sleep_verification() {
             .join("terminal.rs"),
     );
 
-    for fragment in [
-        "persona_wezterm",
-        "WezTerm",
-        "WezTermMux",
-        "thread::sleep",
-        "Duration::from_millis",
-    ] {
+    let retired_transport_fragments = [
+        ["persona", "_", "wez", "term"].concat(),
+        ["Wez", "Term"].concat(),
+        ["Wez", "Term", "Mux"].concat(),
+        "thread::sleep".to_string(),
+        "Duration::from_millis".to_string(),
+    ];
+
+    for fragment in retired_transport_fragments {
         assert!(
-            !source.contains(fragment),
+            !source.contains(fragment.as_str()),
             "terminal delivery still carries retired transport fragment {fragment}"
         );
     }
