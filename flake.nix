@@ -61,6 +61,13 @@
               "harness_identity_projection_cannot_leak_everything_by_default"
             ];
           };
+          harness-kind-closed-schema-enum = mkHarnessPackage pkgs {
+            cargoTestFlags = [
+              "--test"
+              "actor_runtime_truth"
+              "harness_kind_is_closed_schema_enum"
+            ];
+          };
         }
       );
 

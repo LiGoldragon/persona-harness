@@ -20,7 +20,6 @@ pub enum HarnessKind {
     Codex,
     Claude,
     Pi,
-    Other { name: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,19 +46,19 @@ impl HarnessBinding {
         &self.working_directory
     }
 
-    pub fn identity_projection(&self, access: HarnessIdentityAccess) -> HarnessIdentityProjection {
-        match access {
-            HarnessIdentityAccess::Full => HarnessIdentityProjection {
+    pub fn identity_projection(&self, view: HarnessIdentityView) -> HarnessIdentityProjection {
+        match view {
+            HarnessIdentityView::Full => HarnessIdentityProjection {
                 id: Some(self.id.clone()),
                 kind: Some(self.kind.clone()),
                 working_directory: Some(self.working_directory.clone()),
             },
-            HarnessIdentityAccess::Redacted => HarnessIdentityProjection {
+            HarnessIdentityView::Redacted => HarnessIdentityProjection {
                 id: Some(self.id.clone()),
                 kind: None,
                 working_directory: None,
             },
-            HarnessIdentityAccess::Hidden => HarnessIdentityProjection {
+            HarnessIdentityView::Hidden => HarnessIdentityProjection {
                 id: None,
                 kind: None,
                 working_directory: None,
@@ -69,7 +68,7 @@ impl HarnessBinding {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HarnessIdentityAccess {
+pub enum HarnessIdentityView {
     Full,
     Redacted,
     Hidden,

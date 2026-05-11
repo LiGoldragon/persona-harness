@@ -3,10 +3,12 @@
 *Harness identity, lifecycle, transcript, and adapter contracts.*
 
 `persona-harness` models interactive AI harnesses as addressable runtime
-objects. Codex, Claude, Pi, and later harnesses become typed records with
-lifecycle state, transcript streams, and delivery capabilities. The
-Persona-facing terminal contract is `signal-persona-terminal`; terminal
-transport execution is delegated to `persona-terminal`.
+objects. Codex, Claude, and Pi are closed schema variants; later production
+harnesses become explicit variants, not `Other { name }` string payloads.
+Harnesses carry lifecycle state, typed transcript observations, sequence
+pointers, and delivery capabilities. The Persona-facing terminal contract is
+`signal-persona-terminal`; terminal transport execution is delegated to
+`persona-terminal`.
 
 > **Scope.** Any "sema" reference here means today's `sema` library
 > (rename pending → `sema-db`). The eventual `Sema` is broader;
@@ -25,7 +27,7 @@ flowchart LR
     "persona-router" -->|"delivery request"| "Harness"
     "Harness" -->|"adapter command"| "HarnessAdapter"
     "HarnessAdapter" -->|"terminal transport"| "persona-terminal"
-    "Harness" -->|"transcript event"| "persona-router"
+    "Harness" -->|"typed observation + sequence pointer"| "persona-router"
     "Harness" -->|"harness-owned state"| "harness Sema"
 ```
 
@@ -44,19 +46,17 @@ flowchart LR
 ## 2 · State and Ownership
 
 The harness component owns live harness identity and lifecycle state.
-Transcript and lifecycle events are typed observations. `Harness` is the
-mailbox-backed owner for one live harness binding, its lifecycle state, and its
-transcript event count.
+Transcript and lifecycle events are typed observations. Normal fanout carries
+typed observations plus sequence pointers, not broad raw transcript bytes.
+`Harness` is the mailbox-backed owner for one live harness binding, its
+lifecycle state, and its transcript event count.
 
-Harness identity views are connection-class aware. `Owner` and
-`System(persona)` connections may receive full harness identity records.
-`NonOwnerUser` connections receive redacted views by default. `OtherPersona`
-connections see harness identity only through an explicit `EngineRoute`
-projection; no incidental identity leak is acceptable.
-The current code names the local policy result `HarnessIdentityAccess`:
-`Full`, `Redacted`, or `Hidden`. The engine manager still owns minting the
-authoritative `ConnectionClass`; harness code consumes the resulting visibility
-decision, it does not mint the class itself.
+Harness identity views are read-path projections: `Full`, `Redacted`, or
+`Hidden`. The current code names the local view selector
+`HarnessIdentityView`. It is not an authorization gate. Designer/127 keeps
+raw transcript access behind explicit later range queries and closes
+`HarnessKind`; designer/125 puts runtime permission in filesystem ACLs plus
+router channel state choreographed by mind.
 
 When durable harness history is needed, the harness actor opens its **own**
 redb file (e.g. `harness.redb`) through a harness-owned Sema layer over the
@@ -69,7 +69,7 @@ writes; no shared cross-component database. Per
 This repo owns:
 
 - harness domain types;
-- class-aware harness identity projections;
+- read-path harness identity projections;
 - harness actor lifecycle;
 - transcript event shape;
 - adapter contracts.

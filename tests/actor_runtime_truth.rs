@@ -120,14 +120,31 @@ fn harness_identity_projection_cannot_leak_everything_by_default() {
             .join("harness.rs"),
     );
 
-    assert!(source.contains("pub enum HarnessIdentityAccess {"));
+    assert!(source.contains("pub enum HarnessIdentityView {"));
     assert!(source.contains("Full,"));
     assert!(source.contains("Redacted,"));
     assert!(source.contains("Hidden,"));
+    assert!(!source.contains("Access"));
     assert!(source.contains("pub struct HarnessIdentityProjection {"));
     assert!(source.contains("id: Option<HarnessId>,"));
     assert!(source.contains("kind: Option<HarnessKind>,"));
     assert!(source.contains("working_directory: Option<String>,"));
+}
+
+#[test]
+fn harness_kind_is_closed_schema_enum() {
+    let source = SourceFile::read(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("src")
+            .join("harness.rs"),
+    );
+
+    assert!(source.contains("pub enum HarnessKind {"));
+    assert!(source.contains("Codex,"));
+    assert!(source.contains("Claude,"));
+    assert!(source.contains("Pi,"));
+    assert!(!source.contains("Other {"));
+    assert!(!source.contains("name: String"));
 }
 
 #[test]

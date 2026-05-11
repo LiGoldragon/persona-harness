@@ -9,8 +9,9 @@ Rules for work here:
 - Keep OS/window-manager observations in `persona-system`.
 - Keep durable PTY and viewer transport in `persona-terminal`.
 - Model harness capabilities as typed values, not strings.
-- Project harness identity through typed visibility/access records. Do not
-  return full binding records to every caller.
+- Project harness identity through typed read views. Do not return full binding
+  records to every caller, and do not treat the projection enum as an
+  authorization gate.
 - Keep live lifecycle and transcript state inside `Harness`; do not add
   alternate runtime wrappers or public handle wrappers.
 - Preserve the durable-harness invariant: closing a viewer must not kill the
