@@ -8,6 +8,11 @@ lifecycle state, transcript streams, and delivery capabilities. The
 Persona-facing terminal contract is `signal-persona-terminal`; current terminal
 transport execution is delegated to `persona-wezterm`.
 
+> **Scope.** Any "sema" reference here means today's `sema` library
+> (rename pending → `sema-db`). The eventual `Sema` is broader;
+> today's persona-harness is a realization step. See
+> `~/primary/ESSENCE.md` §"Today and eventually".
+
 ---
 
 ## 0 · TL;DR
