@@ -5,7 +5,7 @@ use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::PathBuf;
 
 use kameo::actor::ActorRef;
-use signal_core::{FrameBody, Reply, Request};
+use signal_core::{FrameBody, Reply};
 use signal_persona_harness::{
     Frame as HarnessFrame, HarnessEvent, HarnessHealth, HarnessName, HarnessReadiness,
     HarnessRequest, HarnessRequestUnimplemented, HarnessStatus, HarnessStatusQuery,
@@ -237,7 +237,13 @@ impl HarnessFrameCodec {
 
     pub fn read_request(&self, reader: &mut impl Read) -> Result<HarnessRequest> {
         match self.read_frame(reader)?.into_body() {
-            FrameBody::Request(Request::Operation { payload, .. }) => Ok(payload),
+            FrameBody::Request(request) => {
+                request
+                    .into_payload_checked()
+                    .map_err(|error| Error::UnexpectedSignalFrame {
+                        got: error.to_string(),
+                    })
+            }
             other => Err(Error::UnexpectedSignalFrame {
                 got: format!("{other:?}"),
             }),

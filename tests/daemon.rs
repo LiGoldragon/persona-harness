@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use persona_harness::{
     HarnessCommandLine, HarnessDaemon, HarnessFrameCodec, SocketMode, SupervisionFrameCodec,
 };
-use signal_core::{FrameBody, Reply, Request};
+use signal_core::{FrameBody, Reply, Request, SignalVerb};
 use signal_persona::{
     ComponentHealth, ComponentHealthQuery, ComponentHello, ComponentKind, ComponentName,
     ComponentReadinessQuery, SupervisionFrame, SupervisionProtocolVersion, SupervisionReply,
@@ -77,6 +77,23 @@ fn harness_command_line_requires_socket_path() {
         .expect_err("missing socket is typed");
 
     assert_eq!(error.to_string(), "harness socket path is missing");
+}
+
+#[test]
+fn harness_frame_codec_rejects_mismatched_signal_verb() {
+    let frame = HarnessFrame::new(FrameBody::Request(Request::unchecked_operation(
+        SignalVerb::Assert,
+        HarnessRequest::HarnessStatusQuery(HarnessStatusQuery {
+            harness: HarnessName::new("operator"),
+        }),
+    )));
+    let bytes = frame.encode_length_prefixed().expect("frame encodes");
+    let mut input = bytes.as_slice();
+    let error = HarnessFrameCodec::default()
+        .read_request(&mut input)
+        .expect_err("mismatched verb is rejected");
+
+    assert!(error.to_string().contains("signal verb mismatch"));
 }
 
 #[test]
