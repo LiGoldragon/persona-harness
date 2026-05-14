@@ -2,6 +2,7 @@ pub mod daemon;
 pub mod error;
 pub mod harness;
 pub mod runtime;
+pub mod supervision;
 pub mod terminal;
 pub mod transcript;
 
@@ -15,6 +16,9 @@ pub use harness::{
 };
 pub use runtime::{
     Harness, HarnessLifecycle, HarnessState, ReadState, RecordTranscriptLine, SetHarnessLifecycle,
+};
+pub use supervision::{
+    SupervisionFrameCodec, SupervisionListener, SupervisionProfile, SupervisionSocketMode,
 };
 pub use terminal::{
     HarnessTerminalBinding, HarnessTerminalDelivery, HarnessTerminalEndpoint, TerminalDeliveryPath,

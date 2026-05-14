@@ -105,6 +105,8 @@
             context.cargoTest "daemon" "harness_daemon_applies_spawn_envelope_socket_mode";
           harness-daemon-answers-status-readiness =
             context.cargoTest "daemon" "harness_daemon_answers_status_readiness";
+          harness-daemon-answers-component-supervision-relation =
+            context.cargoTest "daemon" "harness_daemon_answers_component_supervision_relation";
           harness-daemon-returns-typed-unimplemented =
             context.cargoTest "daemon" "harness_daemon_returns_typed_unimplemented";
         }

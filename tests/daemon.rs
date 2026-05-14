@@ -2,10 +2,19 @@ use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
+use std::process::{Child, Command};
 use std::thread;
+use std::time::{Duration, Instant};
 
-use persona_harness::{HarnessCommandLine, HarnessDaemon, HarnessFrameCodec, SocketMode};
+use persona_harness::{
+    HarnessCommandLine, HarnessDaemon, HarnessFrameCodec, SocketMode, SupervisionFrameCodec,
+};
 use signal_core::{FrameBody, Reply, Request};
+use signal_persona::{
+    ComponentHealth, ComponentHealthQuery, ComponentHello, ComponentKind, ComponentName,
+    ComponentReadinessQuery, SupervisionFrame, SupervisionProtocolVersion, SupervisionReply,
+    SupervisionRequest,
+};
 use signal_persona_harness::{
     Frame as HarnessFrame, HarnessEvent, HarnessHealth, HarnessName, HarnessOperationKind,
     HarnessReadiness, HarnessRequest, HarnessRequestUnimplemented, HarnessStatus,
@@ -20,7 +29,7 @@ struct SocketFixture {
 impl SocketFixture {
     fn new(name: &str) -> Self {
         let root = std::env::temp_dir().join(format!(
-            "persona-harness-{name}-{}-{}",
+            "ph-{name}-{}-{}",
             std::process::id(),
             unique_nanos()
         ));
@@ -31,6 +40,10 @@ impl SocketFixture {
 
     fn socket(&self) -> &PathBuf {
         &self.socket
+    }
+
+    fn supervision_socket(&self) -> PathBuf {
+        self.root.join("harness-supervision.sock")
     }
 }
 
@@ -100,6 +113,71 @@ fn harness_daemon_answers_status_readiness() {
 }
 
 #[test]
+fn harness_daemon_answers_component_supervision_relation() {
+    let fixture = SocketFixture::new("component-supervision");
+    let supervision_socket = fixture.supervision_socket();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_persona-harness-daemon"))
+        .arg(fixture.socket())
+        .arg("operator")
+        .env("PERSONA_SOCKET_MODE", "600")
+        .env("PERSONA_SUPERVISION_SOCKET_PATH", &supervision_socket)
+        .env("PERSONA_SUPERVISION_SOCKET_MODE", "600")
+        .spawn()
+        .expect("persona-harness-daemon starts");
+
+    wait_for_socket(&supervision_socket);
+    let mode = std::fs::metadata(&supervision_socket)
+        .expect("supervision socket metadata is readable")
+        .permissions()
+        .mode()
+        & 0o777;
+    assert_eq!(mode, 0o600);
+
+    let mut stream = UnixStream::connect(&supervision_socket).expect("client connects");
+    let codec = SupervisionFrameCodec::new(1024 * 1024);
+
+    write_supervision_request(
+        &mut stream,
+        SupervisionRequest::ComponentHello(ComponentHello {
+            expected_component: ComponentName::new("persona-harness"),
+            expected_kind: ComponentKind::Harness,
+            supervision_protocol_version: SupervisionProtocolVersion::new(1),
+        }),
+    );
+    assert!(matches!(
+        codec.read_reply(&mut stream).expect("identity reply"),
+        SupervisionReply::ComponentIdentity(identity)
+            if identity.name.as_str() == "persona-harness"
+                && identity.kind == ComponentKind::Harness
+    ));
+
+    write_supervision_request(
+        &mut stream,
+        SupervisionRequest::ComponentReadinessQuery(ComponentReadinessQuery {
+            component: ComponentName::new("persona-harness"),
+        }),
+    );
+    assert!(matches!(
+        codec.read_reply(&mut stream).expect("readiness reply"),
+        SupervisionReply::ComponentReady(_)
+    ));
+
+    write_supervision_request(
+        &mut stream,
+        SupervisionRequest::ComponentHealthQuery(ComponentHealthQuery {
+            component: ComponentName::new("persona-harness"),
+        }),
+    );
+    assert!(matches!(
+        codec.read_reply(&mut stream).expect("health reply"),
+        SupervisionReply::ComponentHealthReport(report)
+            if report.health == ComponentHealth::Running
+    ));
+
+    stop_child(&mut child);
+}
+
+#[test]
 fn harness_daemon_returns_typed_unimplemented() {
     let fixture = SocketFixture::new("unimplemented");
     let server = HarnessDaemon::from_socket(fixture.socket())
@@ -136,10 +214,37 @@ fn harness_daemon_returns_typed_unimplemented() {
 }
 
 fn write_request(stream: &mut UnixStream, request: HarnessRequest) {
-    let frame = HarnessFrame::new(FrameBody::Request(Request::assert(request)));
+    let frame = HarnessFrame::new(FrameBody::Request(Request::from_payload(request)));
     let bytes = frame.encode_length_prefixed().expect("request encodes");
     stream.write_all(&bytes).expect("request writes");
     stream.flush().expect("request flushes");
+}
+
+fn write_supervision_request(stream: &mut UnixStream, request: SupervisionRequest) {
+    let frame = SupervisionFrame::new(FrameBody::Request(Request::from_payload(request)));
+    let bytes = frame
+        .encode_length_prefixed()
+        .expect("supervision request encodes");
+    stream
+        .write_all(bytes.as_slice())
+        .expect("supervision request writes");
+    stream.flush().expect("supervision request flushes");
+}
+
+fn wait_for_socket(socket: &PathBuf) {
+    let started = Instant::now();
+    while started.elapsed() < Duration::from_secs(5) {
+        if socket.exists() {
+            return;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    panic!("socket was not created: {}", socket.display());
+}
+
+fn stop_child(child: &mut Child) {
+    let _ = child.kill();
+    let _ = child.wait();
 }
 
 fn read_event(stream: &mut UnixStream) -> HarnessEvent {

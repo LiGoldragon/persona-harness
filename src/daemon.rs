@@ -15,6 +15,7 @@ use signal_persona_harness::{
 use crate::{
     Error, Harness, HarnessBinding, HarnessId, HarnessKind, HarnessLifecycle, HarnessState,
     ReadState, Result, SetHarnessLifecycle,
+    supervision::{SupervisionListener, SupervisionProfile},
 };
 
 #[derive(Debug)]
@@ -53,6 +54,9 @@ impl HarnessDaemon {
 
     pub fn run(self) -> Result<()> {
         let bound = self.bind()?;
+        let _supervision = SupervisionListener::from_environment(SupervisionProfile::harness())
+            .map(SupervisionListener::spawn)
+            .transpose()?;
         eprintln!("persona-harness-daemon socket={}", bound.socket.display());
         bound.serve_forever()
     }

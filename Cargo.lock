@@ -422,7 +422,7 @@ dependencies = [
 [[package]]
 name = "nota-derive"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/nota-derive.git?branch=main#0d1c24086ae585c84ad92317bb8c463b8cc95697"
+source = "git+https://github.com/LiGoldragon/nota-derive.git?branch=main#e24e50afe110810db50a7eb8f9a7963c6761c0af"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -465,6 +465,7 @@ dependencies = [
  "kameo",
  "persona-terminal",
  "signal-core",
+ "signal-persona",
  "signal-persona-harness",
  "signal-persona-terminal",
  "thiserror 2.0.18",
@@ -474,7 +475,7 @@ dependencies = [
 [[package]]
 name = "persona-terminal"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/persona-terminal.git?branch=main#d1c4c688580eae764e280529e54744de90e89cee"
+source = "git+https://github.com/LiGoldragon/persona-terminal.git?branch=main#8b48b24b2d13087558c99b5044c46da5dba9ba54"
 dependencies = [
  "crossterm",
  "kameo",
@@ -684,7 +685,7 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 [[package]]
 name = "sema"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/sema.git#eba7122b2a7b70894b24cd18d5acdcd0dbd455f4"
+source = "git+https://github.com/LiGoldragon/sema.git#4ea561bc53f6aa38fb71a7570665d57191fce0ea"
 dependencies = [
  "redb",
  "rkyv",
@@ -782,7 +783,7 @@ checksum = "dc6fe69c597f9c37bfeeeeeb33da3530379845f10be461a66d16d03eca2ded77"
 [[package]]
 name = "signal-core"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/signal-core.git#9f4e20b4917aa1655004b3701ecbf5bce0eac071"
+source = "git+https://github.com/LiGoldragon/signal-core.git#aa7a0d93ca8f516557c2be789f8556a7aec66da7"
 dependencies = [
  "nota-codec",
  "rkyv",
@@ -821,9 +822,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "signal-persona"
+version = "0.1.0"
+source = "git+https://github.com/LiGoldragon/signal-persona.git#b23adbe682736088f92f14b7fc68e76f5cbd4233"
+dependencies = [
+ "nota-codec",
+ "rkyv",
+ "signal-core",
+ "signal-persona-auth",
+]
+
+[[package]]
+name = "signal-persona-auth"
+version = "0.1.0"
+source = "git+https://github.com/LiGoldragon/signal-persona-auth.git#b62016a90ec9e1f3af5dd064568be3c33756203e"
+dependencies = [
+ "nota-codec",
+ "rkyv",
+ "signal-core",
+]
+
+[[package]]
 name = "signal-persona-harness"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/signal-persona-harness.git?branch=main#283eacf183934809337c7f83dfa88d565ad5787b"
+source = "git+https://github.com/LiGoldragon/signal-persona-harness.git?branch=main#012fc2894aa3303a5bdccdda4229399e5eeb7b9b"
 dependencies = [
  "nota-codec",
  "rkyv",
@@ -834,7 +856,7 @@ dependencies = [
 [[package]]
 name = "signal-persona-terminal"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/signal-persona-terminal.git?branch=main#ea5e2174f3a623e247575cb052a79d86df28dff2"
+source = "git+https://github.com/LiGoldragon/signal-persona-terminal.git?branch=main#b9b36ae626a26ca333693c0e592b6f7870e8d2a3"
 dependencies = [
  "nota-codec",
  "rkyv",
@@ -874,7 +896,7 @@ dependencies = [
 [[package]]
 name = "terminal-cell"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/terminal-cell.git?branch=main#702fdf71340ab3be5ece9ee9a8a8a21349679ff5"
+source = "git+https://github.com/LiGoldragon/terminal-cell.git?branch=main#e837a468007aea69d56d77a18e34bdfe75e48ca6"
 dependencies = [
  "crossterm",
  "kameo",

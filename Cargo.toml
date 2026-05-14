@@ -20,6 +20,7 @@ path = "src/main.rs"
 kameo                   = { version = "0.20", default-features = false, features = ["macros", "tracing"] }
 persona-terminal       = { git = "https://github.com/LiGoldragon/persona-terminal.git", branch = "main" }
 signal-core            = { git = "https://github.com/LiGoldragon/signal-core.git" }
+signal-persona         = { git = "https://github.com/LiGoldragon/signal-persona.git" }
 signal-persona-harness = { git = "https://github.com/LiGoldragon/signal-persona-harness.git", branch = "main" }
 signal-persona-terminal = { git = "https://github.com/LiGoldragon/signal-persona-terminal.git", branch = "main" }
 thiserror               = "2"
