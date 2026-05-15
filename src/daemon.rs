@@ -5,11 +5,11 @@ use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::PathBuf;
 
 use kameo::actor::ActorRef;
-use signal_core::{ExchangeIdentifier, FrameBody, NonEmpty, Reply, SignalVerb, SubReply};
+use signal_core::{ExchangeIdentifier, NonEmpty, Reply, SignalVerb, SubReply};
 use signal_persona_harness::{
-    Frame as HarnessFrame, HarnessEvent, HarnessHealth, HarnessName, HarnessReadiness,
-    HarnessRequest, HarnessRequestUnimplemented, HarnessStatus, HarnessStatusQuery,
-    HarnessUnimplementedReason,
+    HarnessEvent, HarnessFrame, HarnessFrameBody as FrameBody, HarnessHealth, HarnessName,
+    HarnessReadiness, HarnessRequest, HarnessRequestUnimplemented, HarnessStatus,
+    HarnessStatusQuery, HarnessUnimplementedReason,
 };
 
 use crate::{

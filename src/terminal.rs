@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use persona_terminal::contract::TerminalTransportBinding;
 use signal_persona_terminal::{
-    TerminalCapture, TerminalEvent, TerminalInput, TerminalInputBytes, TerminalName,
+    TerminalCapture, TerminalReply, TerminalInput, TerminalInputBytes, TerminalName,
     TerminalRequest,
 };
 
@@ -74,7 +74,7 @@ pub enum TerminalDeliveryPath {
 pub struct TerminalDeliveryReceipt {
     delivered: bool,
     path: TerminalDeliveryPath,
-    accepted_event: Option<TerminalEvent>,
+    accepted_event: Option<TerminalReply>,
 }
 
 impl TerminalDeliveryReceipt {
@@ -86,7 +86,7 @@ impl TerminalDeliveryReceipt {
         }
     }
 
-    fn from_transport(delivered: bool, accepted_event: TerminalEvent) -> Self {
+    fn from_transport(delivered: bool, accepted_event: TerminalReply) -> Self {
         Self {
             delivered,
             path: TerminalDeliveryPath::TerminalTransport,
@@ -102,7 +102,7 @@ impl TerminalDeliveryReceipt {
         self.path
     }
 
-    pub fn accepted_event(&self) -> Option<&TerminalEvent> {
+    pub fn accepted_event(&self) -> Option<&TerminalReply> {
         self.accepted_event.as_ref()
     }
 }
@@ -155,7 +155,7 @@ impl HarnessTerminalDelivery {
         let mut bytes = text.as_bytes().to_vec();
         bytes.push(b'\r');
         let accepted_event = transport.handle_request(binding.input_request(bytes))?;
-        let delivered = matches!(accepted_event, TerminalEvent::TerminalInputAccepted(_));
+        let delivered = matches!(accepted_event, TerminalReply::TerminalInputAccepted(_));
         if delivered {
             self.delivered_input_count = self.delivered_input_count.saturating_add(1);
         }
