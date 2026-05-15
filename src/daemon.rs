@@ -7,14 +7,16 @@ use std::path::PathBuf;
 use kameo::actor::ActorRef;
 use signal_core::{ExchangeIdentifier, NonEmpty, Reply, SignalVerb, SubReply};
 use signal_persona_harness::{
-    HarnessEvent, HarnessFrame, HarnessFrameBody as FrameBody, HarnessHealth, HarnessName,
-    HarnessReadiness, HarnessRequest, HarnessRequestUnimplemented, HarnessStatus,
-    HarnessStatusQuery, HarnessUnimplementedReason,
+    DeliveryCompleted, DeliveryFailed, DeliveryFailureReason, HarnessEvent, HarnessFrame,
+    HarnessFrameBody as FrameBody, HarnessHealth, HarnessName, HarnessReadiness, HarnessRequest,
+    HarnessRequestUnimplemented, HarnessStatus, HarnessStatusQuery, HarnessUnimplementedReason,
+    MessageDelivery,
 };
 
 use crate::{
     Error, Harness, HarnessBinding, HarnessId, HarnessKind, HarnessLifecycle, HarnessState,
-    ReadState, Result, SetHarnessLifecycle,
+    HarnessTerminalBinding, HarnessTerminalDelivery, HarnessTerminalEndpoint, ReadState, Result,
+    SetHarnessLifecycle,
     supervision::{SupervisionListener, SupervisionProfile},
 };
 
@@ -23,6 +25,7 @@ pub struct HarnessDaemon {
     socket: PathBuf,
     harness: HarnessName,
     socket_mode: Option<SocketMode>,
+    terminal_endpoint: Option<HarnessTerminalEndpoint>,
 }
 
 impl HarnessDaemon {
@@ -31,6 +34,7 @@ impl HarnessDaemon {
             socket: socket.into(),
             harness: HarnessName::new("harness"),
             socket_mode: SocketMode::from_environment(),
+            terminal_endpoint: Self::terminal_endpoint_from_environment(),
         }
     }
 
@@ -41,6 +45,11 @@ impl HarnessDaemon {
 
     pub fn with_socket_mode(mut self, socket_mode: SocketMode) -> Self {
         self.socket_mode = Some(socket_mode);
+        self
+    }
+
+    pub fn with_terminal_socket(mut self, path: impl Into<PathBuf>) -> Self {
+        self.terminal_endpoint = Some(HarnessTerminalEndpoint::pty_socket(path));
         self
     }
 
@@ -80,6 +89,7 @@ impl HarnessDaemon {
             runtime,
             listener,
             harness,
+            terminal_endpoint: self.terminal_endpoint,
         })
     }
 
@@ -120,17 +130,24 @@ impl HarnessDaemon {
     fn handle_connection(
         runtime: &tokio::runtime::Runtime,
         harness: &ActorRef<Harness>,
+        terminal_endpoint: Option<HarnessTerminalEndpoint>,
         stream: UnixStream,
     ) -> Result<HarnessEvent> {
         let mut connection = HarnessConnection::from_stream(stream);
         let request = connection.read_signal_request()?;
         let event = runtime.block_on(async {
-            HarnessRequestHandler::new(harness.clone())
+            HarnessRequestHandler::new(harness.clone(), terminal_endpoint)
                 .event_for_request(request.request)
                 .await
         })?;
         connection.write_signal_event(request.exchange, request.verb, event.clone())?;
         Ok(event)
+    }
+
+    fn terminal_endpoint_from_environment() -> Option<HarnessTerminalEndpoint> {
+        std::env::var_os("PERSONA_HARNESS_TERMINAL_SOCKET")
+            .map(PathBuf::from)
+            .map(HarnessTerminalEndpoint::pty_socket)
     }
 }
 
@@ -159,6 +176,7 @@ pub struct BoundHarnessDaemon {
     runtime: tokio::runtime::Runtime,
     listener: UnixListener,
     harness: ActorRef<Harness>,
+    terminal_endpoint: Option<HarnessTerminalEndpoint>,
 }
 
 impl BoundHarnessDaemon {
@@ -168,7 +186,12 @@ impl BoundHarnessDaemon {
 
     pub fn serve_one(self) -> Result<HarnessEvent> {
         let (stream, _address) = self.listener.accept()?;
-        let event = HarnessDaemon::handle_connection(&self.runtime, &self.harness, stream)?;
+        let event = HarnessDaemon::handle_connection(
+            &self.runtime,
+            &self.harness,
+            self.terminal_endpoint.clone(),
+            stream,
+        )?;
         self.runtime
             .block_on(HarnessDaemon::stop_harness(self.harness))?;
         let _ = std::fs::remove_file(&self.socket);
@@ -178,7 +201,12 @@ impl BoundHarnessDaemon {
     pub fn serve_forever(self) -> Result<()> {
         for stream in self.listener.incoming() {
             let stream = stream?;
-            let _ = HarnessDaemon::handle_connection(&self.runtime, &self.harness, stream)?;
+            let _ = HarnessDaemon::handle_connection(
+                &self.runtime,
+                &self.harness,
+                self.terminal_endpoint.clone(),
+                stream,
+            )?;
         }
         Ok(())
     }
@@ -296,15 +324,25 @@ impl Default for HarnessFrameCodec {
 #[derive(Debug, Clone)]
 pub struct HarnessRequestHandler {
     harness: ActorRef<Harness>,
+    terminal_endpoint: Option<HarnessTerminalEndpoint>,
 }
 
 impl HarnessRequestHandler {
-    pub fn new(harness: ActorRef<Harness>) -> Self {
-        Self { harness }
+    pub fn new(
+        harness: ActorRef<Harness>,
+        terminal_endpoint: Option<HarnessTerminalEndpoint>,
+    ) -> Self {
+        Self {
+            harness,
+            terminal_endpoint,
+        }
     }
 
     pub async fn event_for_request(&self, request: HarnessRequest) -> Result<HarnessEvent> {
         match request {
+            HarnessRequest::MessageDelivery(delivery) => {
+                self.message_delivery_event(delivery).await
+            }
             HarnessRequest::HarnessStatusQuery(query) => self.status_event(query).await,
             other => Ok(HarnessRequestUnimplemented {
                 harness: Self::request_harness(&other),
@@ -312,6 +350,42 @@ impl HarnessRequestHandler {
                 reason: HarnessUnimplementedReason::NotBuiltYet,
             }
             .into()),
+        }
+    }
+
+    async fn message_delivery_event(&self, delivery: MessageDelivery) -> Result<HarnessEvent> {
+        let state = self
+            .harness
+            .ask(ReadState::expecting_at_least(0))
+            .await
+            .map_err(|error| Error::ActorCall(error.to_string()))?;
+        if !matches!(state.lifecycle, HarnessLifecycle::Running) {
+            return Ok(Self::delivery_failed(
+                delivery,
+                DeliveryFailureReason::HarnessStoppedBeforeDelivery,
+            ));
+        }
+
+        let Some(endpoint) = self.terminal_endpoint.clone() else {
+            return Ok(Self::delivery_failed(
+                delivery,
+                DeliveryFailureReason::TransportRejected,
+            ));
+        };
+
+        let binding =
+            HarnessTerminalBinding::for_harness(HarnessId::new(delivery.harness.as_str()));
+        let mut terminal_delivery = HarnessTerminalDelivery::new(endpoint);
+        match terminal_delivery.deliver_text(&binding, delivery.body.as_str()) {
+            Ok(receipt) if receipt.delivered() => Ok(DeliveryCompleted {
+                harness: delivery.harness,
+                message_slot: delivery.message_slot,
+            }
+            .into()),
+            Ok(_) | Err(_) => Ok(Self::delivery_failed(
+                delivery,
+                DeliveryFailureReason::TransportRejected,
+            )),
         }
     }
 
@@ -346,6 +420,15 @@ impl HarnessRequestHandler {
         }
     }
 
+    fn delivery_failed(delivery: MessageDelivery, reason: DeliveryFailureReason) -> HarnessEvent {
+        DeliveryFailed {
+            harness: delivery.harness,
+            message_slot: delivery.message_slot,
+            reason,
+        }
+        .into()
+    }
+
     fn request_harness(request: &HarnessRequest) -> HarnessName {
         match request {
             HarnessRequest::MessageDelivery(payload) => payload.harness.clone(),
@@ -377,22 +460,101 @@ impl HarnessCommandLine {
     }
 
     pub fn daemon(&self) -> Result<HarnessDaemon> {
-        let socket = self.arguments.first().ok_or(Error::MissingSocket)?;
-        if let Some(extra) = self.arguments.get(2) {
-            return Err(Error::UnexpectedArgument {
-                got: extra.to_string_lossy().to_string(),
-            });
-        }
-        let daemon = HarnessDaemon::from_socket(PathBuf::from(socket));
-        Ok(match self.arguments.get(1) {
-            Some(harness) => {
-                daemon.with_harness(HarnessName::new(harness.to_string_lossy().to_string()))
-            }
-            None => daemon,
-        })
+        let mut arguments = HarnessDaemonArguments::new(&self.arguments);
+        arguments.parse()
     }
 
     pub fn run(&self) -> Result<()> {
         self.daemon()?.run()
+    }
+}
+
+struct HarnessDaemonArguments<'arguments> {
+    arguments: &'arguments [OsString],
+    index: usize,
+    socket: Option<PathBuf>,
+    harness: Option<HarnessName>,
+    terminal_socket: Option<PathBuf>,
+}
+
+impl<'arguments> HarnessDaemonArguments<'arguments> {
+    fn new(arguments: &'arguments [OsString]) -> Self {
+        Self {
+            arguments,
+            index: 0,
+            socket: None,
+            harness: None,
+            terminal_socket: None,
+        }
+    }
+
+    fn parse(&mut self) -> Result<HarnessDaemon> {
+        while let Some(argument) = self.next() {
+            match argument.to_string_lossy().as_ref() {
+                "--socket" => self.socket = Some(PathBuf::from(self.required_value("--socket")?)),
+                "--harness" => {
+                    self.harness = Some(HarnessName::new(
+                        self.required_value("--harness")?
+                            .to_string_lossy()
+                            .to_string(),
+                    ))
+                }
+                "--terminal-socket" => {
+                    self.terminal_socket =
+                        Some(PathBuf::from(self.required_value("--terminal-socket")?))
+                }
+                _ if self.socket.is_none()
+                    && !CommandLineArgument::new(argument).starts_option() =>
+                {
+                    self.socket = Some(PathBuf::from(argument));
+                }
+                _ if self.harness.is_none()
+                    && !CommandLineArgument::new(argument).starts_option() =>
+                {
+                    self.harness = Some(HarnessName::new(argument.to_string_lossy().to_string()));
+                }
+                other => {
+                    return Err(Error::UnexpectedArgument {
+                        got: other.to_string(),
+                    });
+                }
+            }
+        }
+
+        let mut daemon =
+            HarnessDaemon::from_socket(self.socket.take().ok_or(Error::MissingSocket)?);
+        if let Some(harness) = self.harness.take() {
+            daemon = daemon.with_harness(harness);
+        }
+        if let Some(terminal_socket) = self.terminal_socket.take() {
+            daemon = daemon.with_terminal_socket(terminal_socket);
+        }
+        Ok(daemon)
+    }
+
+    fn next(&mut self) -> Option<&'arguments OsString> {
+        let argument = self.arguments.get(self.index)?;
+        self.index += 1;
+        Some(argument)
+    }
+
+    fn required_value(&mut self, option: &str) -> Result<&'arguments OsString> {
+        self.next().ok_or_else(|| Error::UnexpectedArgument {
+            got: format!("{option} without value"),
+        })
+    }
+}
+
+struct CommandLineArgument<'argument> {
+    value: &'argument OsString,
+}
+
+impl<'argument> CommandLineArgument<'argument> {
+    fn new(value: &'argument OsString) -> Self {
+        Self { value }
+    }
+
+    fn starts_option(&self) -> bool {
+        self.value.to_string_lossy().starts_with("--")
     }
 }

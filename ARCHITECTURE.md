@@ -132,6 +132,12 @@ This repo does not own:
 - The daemon accepts length-prefixed `signal-persona-harness` frames.
 - The daemon applies the managed spawn-envelope socket mode to `harness.sock`
   before accepting client traffic.
+- The daemon turns `MessageDelivery` into terminal input only when a typed
+  terminal endpoint was provided by its spawn envelope or CLI.
+- The daemon reports `DeliveryCompleted` only after terminal transport accepts
+  the input bytes.
+- The daemon reports typed `DeliveryFailed` when no terminal endpoint is
+  available.
 - The daemon answers `HarnessStatusQuery` with typed health and readiness.
 - The daemon returns `HarnessRequestUnimplemented` for valid contract
   operations that are not built yet.
@@ -157,6 +163,8 @@ tests/            harness smoke and actor-runtime constraint tests
 | Harness identity projection cannot collapse back to one always-full record. | `nix flake check .#harness-identity-projection-source-constraint` |
 | Fixture-only human terminal endpoints cannot claim production delivery. | `nix flake check .#terminal-fixture-endpoint-not-production-delivery` |
 | Harness daemon applies the managed spawn-envelope socket mode. | `nix flake check .#harness-daemon-applies-spawn-envelope-socket-mode` |
+| Harness daemon delivers message bytes to a configured terminal endpoint. | `nix flake check .#harness-daemon-delivers-message-to-terminal-endpoint` |
+| Harness daemon rejects message delivery without a terminal endpoint. | `nix flake check .#harness-daemon-rejects-message-delivery-without-terminal-endpoint` |
 | Harness daemon answers status/readiness through its Signal boundary. | `nix flake check .#harness-daemon-answers-status-readiness` |
 | Harness daemon returns typed unimplemented for valid unfinished requests. | `nix flake check .#harness-daemon-returns-typed-unimplemented` |
 

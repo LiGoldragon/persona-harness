@@ -1,8 +1,9 @@
-use std::io::Write;
+use std::io::{Read, Write};
 use std::os::unix::fs::PermissionsExt;
-use std::os::unix::net::UnixStream;
+use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::PathBuf;
 use std::process::{Child, Command};
+use std::sync::mpsc::{Receiver, channel};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -19,9 +20,11 @@ use signal_persona::{
     SupervisionReply, SupervisionRequest,
 };
 use signal_persona_harness::{
-    HarnessEvent, HarnessFrame, HarnessFrameBody, HarnessHealth, HarnessName, HarnessOperationKind,
-    HarnessReadiness, HarnessRequest, HarnessRequestUnimplemented, HarnessStatus,
-    HarnessStatusQuery, HarnessUnimplementedReason, InteractionPrompt,
+    DeliveryCompleted, DeliveryFailed, DeliveryFailureReason, HarnessEvent, HarnessFrame,
+    HarnessFrameBody, HarnessHealth, HarnessName, HarnessOperationKind, HarnessReadiness,
+    HarnessRequest, HarnessRequestUnimplemented, HarnessStatus, HarnessStatusQuery,
+    HarnessUnimplementedReason, InteractionPrompt, MessageBody, MessageDelivery, MessageSender,
+    MessageSlot,
 };
 
 struct SocketFixture {
@@ -53,6 +56,65 @@ impl SocketFixture {
 impl Drop for SocketFixture {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.root);
+    }
+}
+
+struct TerminalAcceptanceSocket {
+    path: PathBuf,
+    received: Receiver<Vec<u8>>,
+}
+
+impl TerminalAcceptanceSocket {
+    fn new(name: &str) -> Self {
+        let path = std::env::temp_dir().join(format!(
+            "ph-terminal-{name}-{}-{}.sock",
+            std::process::id(),
+            unique_nanos()
+        ));
+        let listener = UnixListener::bind(&path).expect("terminal acceptance socket binds");
+        let (sender, received) = channel();
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("terminal socket accepts input");
+            let mut request_kind = [0_u8; 1];
+            stream
+                .read_exact(&mut request_kind)
+                .expect("terminal socket reads request kind");
+            assert_eq!(request_kind[0], b'P');
+            let mut length = [0_u8; 8];
+            stream
+                .read_exact(&mut length)
+                .expect("terminal socket reads input length");
+            let byte_count = u64::from_be_bytes(length) as usize;
+            let mut bytes = vec![0_u8; byte_count];
+            stream
+                .read_exact(bytes.as_mut_slice())
+                .expect("terminal socket reads input bytes");
+            sender.send(bytes).expect("terminal socket reports bytes");
+            stream
+                .write_all(b"A")
+                .expect("terminal socket writes acceptance");
+            stream.flush().expect("terminal socket flushes acceptance");
+        });
+        Self { path, received }
+    }
+
+    fn path(&self) -> &PathBuf {
+        &self.path
+    }
+
+    fn received_text(&self) -> String {
+        String::from_utf8(
+            self.received
+                .recv_timeout(Duration::from_secs(5))
+                .expect("terminal socket receives input bytes"),
+        )
+        .expect("terminal input is utf8")
+    }
+}
+
+impl Drop for TerminalAcceptanceSocket {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
     }
 }
 
@@ -109,6 +171,84 @@ fn harness_frame_codec_rejects_mismatched_signal_verb() {
         }
         other => panic!("expected typed signal request rejection, got {other:?}"),
     }
+}
+
+#[test]
+fn harness_daemon_delivers_message_to_terminal_endpoint() {
+    let fixture = SocketFixture::new("message-delivery");
+    let terminal = TerminalAcceptanceSocket::new("message-delivery");
+    let server = HarnessDaemon::from_socket(fixture.socket())
+        .with_harness(HarnessName::new("operator"))
+        .with_terminal_socket(terminal.path())
+        .bind()
+        .expect("daemon binds before client connects");
+    let socket = server.socket().clone();
+    let handle = thread::spawn(move || server.serve_one());
+
+    let mut stream = UnixStream::connect(socket).expect("client connects");
+    write_request(
+        &mut stream,
+        MessageDelivery {
+            harness: HarnessName::new("operator"),
+            sender: MessageSender::new("router"),
+            body: MessageBody::new("deliver through harness daemon"),
+            message_slot: MessageSlot::new(7),
+        }
+        .into(),
+    );
+    let event = read_event(&mut stream);
+    let server_event = handle
+        .join()
+        .expect("daemon thread joins")
+        .expect("daemon handles one request");
+
+    let expected = HarnessEvent::DeliveryCompleted(DeliveryCompleted {
+        harness: HarnessName::new("operator"),
+        message_slot: MessageSlot::new(7),
+    });
+    assert_eq!(event, expected);
+    assert_eq!(server_event, expected);
+    assert!(
+        terminal
+            .received_text()
+            .contains("deliver through harness daemon")
+    );
+}
+
+#[test]
+fn harness_daemon_rejects_message_delivery_without_terminal_endpoint() {
+    let fixture = SocketFixture::new("message-no-terminal");
+    let server = HarnessDaemon::from_socket(fixture.socket())
+        .with_harness(HarnessName::new("operator"))
+        .bind()
+        .expect("daemon binds before client connects");
+    let socket = server.socket().clone();
+    let handle = thread::spawn(move || server.serve_one());
+
+    let mut stream = UnixStream::connect(socket).expect("client connects");
+    write_request(
+        &mut stream,
+        MessageDelivery {
+            harness: HarnessName::new("operator"),
+            sender: MessageSender::new("router"),
+            body: MessageBody::new("cannot deliver without terminal"),
+            message_slot: MessageSlot::new(8),
+        }
+        .into(),
+    );
+    let event = read_event(&mut stream);
+    let server_event = handle
+        .join()
+        .expect("daemon thread joins")
+        .expect("daemon handles one request");
+
+    let expected = HarnessEvent::DeliveryFailed(DeliveryFailed {
+        harness: HarnessName::new("operator"),
+        message_slot: MessageSlot::new(8),
+        reason: DeliveryFailureReason::TransportRejected,
+    });
+    assert_eq!(event, expected);
+    assert_eq!(server_event, expected);
 }
 
 #[test]
