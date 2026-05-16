@@ -7,17 +7,17 @@ use std::path::PathBuf;
 use kameo::actor::ActorRef;
 use signal_core::{ExchangeIdentifier, NonEmpty, Reply, SignalVerb, SubReply};
 use signal_persona_harness::{
-    DeliveryCompleted, DeliveryFailed, DeliveryFailureReason, HarnessEvent, HarnessFrame,
-    HarnessFrameBody as FrameBody, HarnessHealth, HarnessName, HarnessReadiness, HarnessRequest,
-    HarnessRequestUnimplemented, HarnessStatus, HarnessStatusQuery, HarnessUnimplementedReason,
-    MessageDelivery,
+    DeliveryCompleted, DeliveryFailed, DeliveryFailureReason, HarnessDaemonConfiguration,
+    HarnessEvent, HarnessFrame, HarnessFrameBody as FrameBody, HarnessHealth, HarnessName,
+    HarnessReadiness, HarnessRequest, HarnessRequestUnimplemented, HarnessStatus, HarnessStatusQuery,
+    HarnessUnimplementedReason, MessageDelivery,
 };
 
 use crate::{
     Error, Harness, HarnessBinding, HarnessId, HarnessKind, HarnessLifecycle, HarnessState,
     HarnessTerminalBinding, HarnessTerminalDelivery, HarnessTerminalEndpoint, ReadState, Result,
     SetHarnessLifecycle,
-    supervision::{SupervisionListener, SupervisionProfile},
+    supervision::{SupervisionListener, SupervisionProfile, SupervisionSocketMode},
 };
 
 #[derive(Debug)]
@@ -27,9 +27,36 @@ pub struct HarnessDaemon {
     kind: HarnessKind,
     socket_mode: Option<SocketMode>,
     terminal_endpoint: Option<HarnessTerminalEndpoint>,
+    supervision: Option<SupervisionListener>,
 }
 
 impl HarnessDaemon {
+    /// Canonical constructor — every production launch reads typed
+    /// `HarnessDaemonConfiguration` from argv via `nota-config` and
+    /// hands the record here.
+    pub fn from_configuration(configuration: HarnessDaemonConfiguration) -> Self {
+        let supervision = SupervisionListener::new(
+            SupervisionProfile::harness(),
+            PathBuf::from(configuration.supervision_socket_path.as_str()),
+            SupervisionSocketMode::from_octal(
+                configuration.supervision_socket_mode.into_u32(),
+            ),
+        );
+        let terminal_endpoint = configuration
+            .terminal_socket_path
+            .map(|path| HarnessTerminalEndpoint::pty_socket(path.as_str()));
+        Self {
+            socket: PathBuf::from(configuration.harness_socket_path.as_str()),
+            harness: configuration.harness_name,
+            kind: HarnessKind::from_contract(configuration.harness_kind),
+            socket_mode: Some(SocketMode::from_octal(
+                configuration.harness_socket_mode.into_u32(),
+            )),
+            terminal_endpoint,
+            supervision: Some(supervision),
+        }
+    }
+
     pub fn from_socket(socket: impl Into<PathBuf>) -> Self {
         Self {
             socket: socket.into(),
@@ -37,6 +64,7 @@ impl HarnessDaemon {
             kind: HarnessKind::Fixture,
             socket_mode: SocketMode::from_environment(),
             terminal_endpoint: Self::terminal_endpoint_from_environment(),
+            supervision: None,
         }
     }
 
@@ -73,10 +101,9 @@ impl HarnessDaemon {
     }
 
     pub fn run(self) -> Result<()> {
+        let supervision = self.supervision.clone();
         let bound = self.bind()?;
-        let _supervision = SupervisionListener::from_environment(SupervisionProfile::harness())
-            .map(SupervisionListener::spawn)
-            .transpose()?;
+        let _supervision = supervision.map(SupervisionListener::spawn).transpose()?;
         eprintln!("persona-harness-daemon socket={}", bound.socket.display());
         bound.serve_forever()
     }

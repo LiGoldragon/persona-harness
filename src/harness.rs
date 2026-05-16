@@ -47,6 +47,17 @@ impl HarnessKind {
             Self::Fixture => "fixture",
         }
     }
+
+    /// Project a `signal-persona-harness`-contract `HarnessKind` onto
+    /// the internal kind enum.
+    pub const fn from_contract(value: signal_persona_harness::HarnessKind) -> Self {
+        match value {
+            signal_persona_harness::HarnessKind::Codex => Self::Codex,
+            signal_persona_harness::HarnessKind::Claude => Self::Claude,
+            signal_persona_harness::HarnessKind::Pi => Self::Pi,
+            signal_persona_harness::HarnessKind::Fixture => Self::Fixture,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

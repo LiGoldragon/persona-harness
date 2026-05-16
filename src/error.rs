@@ -27,6 +27,9 @@ pub enum Error {
 
     #[error("terminal transport failed: {0}")]
     TerminalTransport(#[from] persona_terminal::Error),
+
+    #[error("nota-config: {0}")]
+    NotaConfig(#[from] nota_config::Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

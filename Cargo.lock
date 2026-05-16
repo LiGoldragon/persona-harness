@@ -420,6 +420,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "nota-config"
+version = "0.1.0"
+source = "git+https://github.com/LiGoldragon/nota-config.git?branch=main#d557fbf1dea78e417aa26a3b2858e810a6b6f292"
+dependencies = [
+ "nota-codec",
+ "rkyv",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "nota-derive"
 version = "0.1.0"
 source = "git+https://github.com/LiGoldragon/nota-derive.git?branch=main#e24e50afe110810db50a7eb8f9a7963c6761c0af"
@@ -463,9 +473,11 @@ name = "persona-harness"
 version = "0.1.0"
 dependencies = [
  "kameo",
+ "nota-config",
  "persona-terminal",
  "signal-core",
  "signal-persona",
+ "signal-persona-auth",
  "signal-persona-harness",
  "signal-persona-terminal",
  "thiserror 2.0.18",
@@ -784,7 +796,7 @@ checksum = "dc6fe69c597f9c37bfeeeeeb33da3530379845f10be461a66d16d03eca2ded77"
 [[package]]
 name = "signal-core"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/signal-core.git#25212c0d2a3f6403e8131d8db4b810e14fdd826b"
+source = "git+https://github.com/LiGoldragon/signal-core.git#f17efc1c9c8c2d3bf755ef3a285a8618886c49fa"
 dependencies = [
  "nota-codec",
  "rkyv",
@@ -795,7 +807,7 @@ dependencies = [
 [[package]]
 name = "signal-core-macros"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/signal-core.git#25212c0d2a3f6403e8131d8db4b810e14fdd826b"
+source = "git+https://github.com/LiGoldragon/signal-core.git#f17efc1c9c8c2d3bf755ef3a285a8618886c49fa"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -857,11 +869,14 @@ dependencies = [
 [[package]]
 name = "signal-persona-harness"
 version = "0.1.0"
-source = "git+https://github.com/LiGoldragon/signal-persona-harness.git?branch=main#380d91bd12987a671d18d1a959d9d0a1d9dbb8e6"
+source = "git+https://github.com/LiGoldragon/signal-persona-harness.git?branch=main#dcebbb12e67240689031997fd34b13a5dfbc3826"
 dependencies = [
  "nota-codec",
+ "nota-config",
  "rkyv",
  "signal-core",
+ "signal-persona",
+ "signal-persona-auth",
  "thiserror 2.0.18",
 ]
 
