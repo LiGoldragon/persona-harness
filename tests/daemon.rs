@@ -335,14 +335,36 @@ fn harness_daemon_answers_status_readiness() {
 /// the constraint-test table) for the supervision socket specifically.
 #[test]
 fn harness_daemon_applies_distinctive_spawn_envelope_socket_modes() {
+    use nota_codec::{Encoder, NotaEncode};
+    use signal_persona::{SocketMode as WireSocketMode, WirePath};
+    use signal_persona_auth::{OwnerIdentity, UnixUserId};
+    use signal_persona_harness::{
+        HarnessDaemonConfiguration, HarnessKind as ContractHarnessKind, HarnessName,
+    };
+
     let fixture = SocketFixture::new("distinctive-socket-modes");
     let supervision_socket = fixture.supervision_socket();
+    let configuration_path = fixture.root.join("harness-daemon.nota");
+    let configuration = HarnessDaemonConfiguration {
+        harness_socket_path: WirePath::new(fixture.socket().display().to_string()),
+        harness_socket_mode: WireSocketMode::new(0o640),
+        supervision_socket_path: WirePath::new(supervision_socket.display().to_string()),
+        supervision_socket_mode: WireSocketMode::new(0o660),
+        harness_name: HarnessName::new("operator"),
+        harness_kind: ContractHarnessKind::Fixture,
+        terminal_socket_path: None,
+        owner_identity: OwnerIdentity::UnixUser(UnixUserId::new(1000)),
+    };
+    let mut encoder = Encoder::new();
+    configuration
+        .encode(&mut encoder)
+        .expect("encode harness config");
+    let mut text = encoder.into_string();
+    text.push('\n');
+    std::fs::write(&configuration_path, text).expect("write harness config");
+
     let mut child = Command::new(env!("CARGO_BIN_EXE_persona-harness-daemon"))
-        .arg(fixture.socket())
-        .arg("operator")
-        .env("PERSONA_SOCKET_MODE", "640")
-        .env("PERSONA_SUPERVISION_SOCKET_PATH", &supervision_socket)
-        .env("PERSONA_SUPERVISION_SOCKET_MODE", "660")
+        .arg(&configuration_path)
         .spawn()
         .expect("persona-harness-daemon starts");
 
@@ -374,14 +396,36 @@ fn harness_daemon_applies_distinctive_spawn_envelope_socket_modes() {
 
 #[test]
 fn harness_daemon_answers_component_supervision_relation() {
+    use nota_codec::{Encoder, NotaEncode};
+    use signal_persona::{SocketMode as WireSocketMode, WirePath};
+    use signal_persona_auth::{OwnerIdentity, UnixUserId};
+    use signal_persona_harness::{
+        HarnessDaemonConfiguration, HarnessKind as ContractHarnessKind, HarnessName,
+    };
+
     let fixture = SocketFixture::new("component-supervision");
     let supervision_socket = fixture.supervision_socket();
+    let configuration_path = fixture.root.join("harness-daemon.nota");
+    let configuration = HarnessDaemonConfiguration {
+        harness_socket_path: WirePath::new(fixture.socket().display().to_string()),
+        harness_socket_mode: WireSocketMode::new(0o600),
+        supervision_socket_path: WirePath::new(supervision_socket.display().to_string()),
+        supervision_socket_mode: WireSocketMode::new(0o600),
+        harness_name: HarnessName::new("operator"),
+        harness_kind: ContractHarnessKind::Fixture,
+        terminal_socket_path: None,
+        owner_identity: OwnerIdentity::UnixUser(UnixUserId::new(1000)),
+    };
+    let mut encoder = Encoder::new();
+    configuration
+        .encode(&mut encoder)
+        .expect("encode harness config");
+    let mut text = encoder.into_string();
+    text.push('\n');
+    std::fs::write(&configuration_path, text).expect("write harness config");
+
     let mut child = Command::new(env!("CARGO_BIN_EXE_persona-harness-daemon"))
-        .arg(fixture.socket())
-        .arg("operator")
-        .env("PERSONA_SOCKET_MODE", "600")
-        .env("PERSONA_SUPERVISION_SOCKET_PATH", &supervision_socket)
-        .env("PERSONA_SUPERVISION_SOCKET_MODE", "600")
+        .arg(&configuration_path)
         .spawn()
         .expect("persona-harness-daemon starts");
 

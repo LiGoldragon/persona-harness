@@ -473,6 +473,7 @@ name = "persona-harness"
 version = "0.1.0"
 dependencies = [
  "kameo",
+ "nota-codec",
  "nota-config",
  "persona-terminal",
  "signal-core",
